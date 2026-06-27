@@ -25,11 +25,15 @@ COMP_TABLE="${COMP_TABLE:-comp_table}"
 DATA_DIR="${DATA_DIR:-data}"
 SAMPLES="${SAMPLES:-}"
 DRY_RUN="${DRY_RUN:-0}"
+FORCE="${FORCE:-0}"
 
 run() { if [ "$DRY_RUN" = "1" ]; then echo "  + $*"; else "$@"; fi; }
 
 get() {  # get <remote_abs_path> <local_dest> [optional]
   local src="$1" dst="$2" opt="${3:-}"
+  # resolve final file path (scp to a dir lands at dir/basename)
+  local final="$dst"; case "$dst" in */) final="$dst$(basename "$src")";; esac
+  if [ "$FORCE" != "1" ] && [ -s "$final" ]; then echo "  exists, skip: $final"; return 0; fi
   if [ "$opt" = optional ]; then
     run scp "$REMOTE_HOST:$src" "$dst" || echo "  (skip missing: $src)"
   else
@@ -69,7 +73,7 @@ else
     while IFS=$'\t' read -r sample visium_outs codex_tif channel codex_csv; do
       [ -z "${sample:-}" ] && continue
       case "$sample" in \#*) continue;; esac
-      if [ -n "$SAMPLES" ] && ! grep -qw "$sample" <<<"$SAMPLES"; then continue; fi
+      # always write ALL samples (not just $SAMPLES) so the table stays complete
       printf '%s\t%s\t%s\t%s\n' "$sample" "$DATA_DIR/$sample/segmented_outputs" \
         "$DATA_DIR/${sample}_reference.tif" "${channel:-34}"
     done < "$COMP_TABLE"

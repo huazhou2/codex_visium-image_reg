@@ -52,7 +52,12 @@ def read_comp_table(path: Path):
     return rows
 
 
-def scp(host: str, remote: str, local: Path, optional: bool, dry_run: bool):
+def scp(host: str, remote: str, local: Path, optional: bool, dry_run: bool, force: bool):
+    # resolve the final file path (scp to a dir lands at dir/basename)
+    target = local / Path(remote).name if local.is_dir() else local
+    if not force and target.exists() and target.stat().st_size > 0:
+        print(f"  exists, skip: {target}")
+        return
     cmd = ["scp", f"{host}:{remote}", str(local)]
     if dry_run:
         print("  +", " ".join(cmd))
@@ -73,6 +78,7 @@ def main():
     ap.add_argument("--samples", nargs="*", help="limit to these sample names")
     ap.add_argument("--sample-table-out", type=Path, default=Path("sample_table.data.tsv"),
                     help="local sample-table written from comp_table after download")
+    ap.add_argument("--force", action="store_true", help="re-download even if the local file already exists")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
 
@@ -89,19 +95,18 @@ def main():
         for rel, dest_sub, optional in VISIUM_FILES:
             remote = f"{row['visium_outs']}/{rel}"
             local = sample_root / dest_sub
-            scp(args.host, remote, local, optional, args.dry_run)
+            scp(args.host, remote, local, optional, args.dry_run, args.force)
 
         # CODEX (cols 3 & 5)
-        scp(args.host, row["codex_tif"], args.data_dir / f"{s}_reference.tif", False, args.dry_run)
+        scp(args.host, row["codex_tif"], args.data_dir / f"{s}_reference.tif", False, args.dry_run, args.force)
         if row["codex_csv"]:
-            scp(args.host, row["codex_csv"], args.data_dir / f"{s}_codex_cells.csv", True, args.dry_run)
+            scp(args.host, row["codex_csv"], args.data_dir / f"{s}_codex_cells.csv", True, args.dry_run, args.force)
 
-    # emit the local sample-table (./data paths) for steps 1 & 3
+    # emit the local sample-table (./data paths) for steps 1 & 3.
+    # Always write ALL samples in comp_table (not just --samples) so the table stays complete.
     rows = read_comp_table(args.comp_table)
     lines = ["sample_name\tvisium_path\tcodex_reference_tif\tcodex_channel"]
     for r in rows:
-        if wanted and r["sample"] not in wanted:
-            continue
         lines.append("\t".join([
             r["sample"],
             str(args.data_dir / r["sample"] / "segmented_outputs"),
