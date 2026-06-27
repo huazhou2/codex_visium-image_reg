@@ -1,0 +1,19 @@
+# Large downloaded inputs — regenerate with 0_download_from_comp_table.{sh,py}
+data/
+
+# Pipeline outputs — regenerate with step 3
+registered/
+
+# Large images / data that should never be committed
+*.tif
+*.tiff
+*_codex_cells.csv
+
+# Generated locally after download (derives from comp_table)
+sample_table.data.tsv
+
+# Python / macOS cruft
+__pycache__/
+*.pyc
+.DS_Store
+.idea/
